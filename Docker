@@ -1,12 +1,15 @@
 ARG TRINO_SERVER=459
 
 # Stage 1: Base Image with Required Tools
-FROM nexus3.systems.uk.hsbc:18096/com/hsbc/group/itid/es/dc/ubuntu/gcr-ubuntu-2404:latest AS base
+FROM nexus3.systems.uk.hsbc:18096/com/hsbc/group/itid/es/dc/ubuntu/gcr-ubuntu-2404:24.04 AS base
 ENV DEBIAN_FRONTEND=noninteractive
 ARG TRINO_SERVER=459
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl python3.12-minimal python-is-python3 ca-certificates && \
+    curl \
+    python3.12-minimal=$(apt-cache madison python3.12-minimal | awk '{print $3}' | head -n 1) \
+    python-is-python3=$(apt-cache madison python-is-python3 | awk '{print $3}' | head -n 1) \
+    ca-certificates && \
     apt-get autoremove -y && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -15,7 +18,7 @@ FROM base AS downloader
 WORKDIR /setup
 COPY setup.sh /setup/
 
-RUN chmod +x setup.sh && ./setup.sh $TRINO_SERVER
+RUN chmod +x setup.sh && ./setup.sh "$TRINO_SERVER"
 
 # Stage 3: Final Trino Image
 FROM base AS final
@@ -34,10 +37,10 @@ COPY bin/run-trino.sh /usr/lib/trino/bin/run-trino.sh
 COPY bin/health-check.sh /usr/lib/trino/bin/health-check.sh
 
 RUN set -eux; \
-    groupadd --gid 400004830 $INSTALL_GROUP; \
-    useradd -m -u 200052391 -g $INSTALL_GROUP $APP_INSTALL_OWNER; \
+    groupadd --gid 400004830 "$INSTALL_GROUP"; \
+    useradd -l -m -u 200052391 -g "$INSTALL_GROUP" "$APP_INSTALL_OWNER"; \
     mkdir -p /data/trino; \
-    chown -R $APP_INSTALL_OWNER:$INSTALL_GROUP /usr/lib/trino /data/trino; \
+    chown -R "$APP_INSTALL_OWNER":"$INSTALL_GROUP" /usr/lib/trino /data/trino; \
     chmod +x /usr/bin/trino /usr/lib/trino/bin/run-trino.sh /usr/lib/trino/bin/health-check.sh
 
 # Set Environment Variables
@@ -45,7 +48,7 @@ ENV JAVA_HOME="/opt/sajava"
 ENV PATH="$JAVA_HOME/bin:$PATH"
 
 # Final Container Settings
-USER $APP_INSTALL_OWNER:$INSTALL_GROUP
+USER "$APP_INSTALL_OWNER":"$INSTALL_GROUP"
 EXPOSE 8080
 CMD ["/usr/lib/trino/bin/run-trino.sh"]
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s CMD ["/usr/lib/trino/bin/health-check.sh"]
