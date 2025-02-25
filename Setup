@@ -1,0 +1,29 @@
+#!/bin/bash
+set -eux
+
+TRINO_SERVER=$1
+
+# Download and Extract Trino
+curl -fsSL -o /trino-server.tar.gz "https://nexus304.systems.uk.hsbc:8081/nexus/repository/maven-central/io/trino/trino-server/${TRINO_SERVER}/trino-server-${TRINO_SERVER}.tar.gz"
+curl -fsSL -o /trino-cli.jar "https://nexus304.systems.uk.hsbc:8081/nexus/repository/maven-central/io/trino/trino-cli/${TRINO_SERVER}/trino-cli-${TRINO_SERVER}-executable.jar"
+
+mkdir -p /opt/trino
+tar -xzf /trino-server.tar.gz -C /opt/trino --strip-components=1
+rm /trino-server.tar.gz
+
+# Retain only necessary plugins
+mv /opt/trino/plugin /opt/trino/plugin-backup
+mkdir /opt/trino/plugin
+mv /opt/trino/plugin-backup/{bigquery,delta-lake,jmx,memory,opa,postgresql,prometheus,tpcds,tpch} /opt/trino/plugin/
+rm -rf /opt/trino/plugin-backup
+
+# Download and Extract Java
+curl -fsSL -o /java.tar.gz "https://nexus302.systems.uk.hsbc:8081/nexus/repository/adoptium-api-proxy/v3/binary/latest/22/ga/linux/x64/jdk/hotspot/normal/eclipse?project=jdk"
+tar -xzf /java.tar.gz -C /opt/
+mv /opt/jdk-* /opt/sajava
+rm /java.tar.gz
+
+# Install jvmkill
+apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev make
+make -C /jvmkill
+rm -rf /var/lib/apt/lists/*
